@@ -40,18 +40,22 @@ use {
 }
 ```
 
-And you're done! Just use one of the subcommands of `:rec`:
+And you're done! Just use one of the subcommands of `:Rec`:
 
- - `:rec start` starts recording from your main microphone.
+ - `:Rec start` starts recording from your main microphone.
    The recording is saved inside a `.recordings/` directory in the current working directory. The name of the file is generated from the current ISO date and time and its extension is OGG (Opus/Vorbis).
 
    <!-- Only in debug mode, FIXME -->
    <!-- A buffer will be created with URI `rec://` where you can see some  -->
    <!-- info about the recording.  -->
 
- - `:rec annotate` adds the current timestamp as an extmark at the end of the line. This is useful when taking lecture notes to know where in the recording a passage was said.
+![](assets/start.mp4)
 
- - `:rec stop` stops the current recording.
+ - `:Rec annotate` adds the current timestamp as an extmark at the end of the line. This is useful when taking lecture notes to know where in the recording a passage was said. Extmarks are saved on a file generated inside `.recordings/`.
+
+![](assets/annotate.mp4)
+
+ - `:Rec stop` stops the current recording.
 
    <!-- This does not close the `rec://` buffer. -->
 
