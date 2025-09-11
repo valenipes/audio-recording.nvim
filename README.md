@@ -49,11 +49,9 @@ And you're done! Just use one of the subcommands of `:Rec`:
    <!-- A buffer will be created with URI `rec://` where you can see some  -->
    <!-- info about the recording.  -->
 
-![](assets/start.mp4)
 
  - `:Rec annotate` adds the current timestamp as an extmark at the end of the line. This is useful when taking lecture notes to know where in the recording a passage was said. Extmarks are saved on a file generated inside `.recordings/`.
 
-![](assets/annotate.mp4)
 
  - `:Rec stop` stops the current recording.
 
