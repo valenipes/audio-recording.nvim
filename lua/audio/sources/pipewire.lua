@@ -1,5 +1,5 @@
 
-local global_defaults = require('audio-recording.defaults')
+local global_defaults = require('audio.defaults')
 
 --- Generates a Pipewire source.
 --- This requires `pw-record` installed.

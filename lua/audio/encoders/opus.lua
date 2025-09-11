@@ -1,4 +1,4 @@
-local global_defaults = require('audio-recording.defaults')
+local global_defaults = require('audio.defaults')
 
 local M = {}
 
