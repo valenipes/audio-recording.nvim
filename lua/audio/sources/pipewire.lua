@@ -1,8 +1,5 @@
----@module 'kyouko.sources.pipewire'
----@author andry-dev
----@license GPL-3.0
 
-local global_defaults = require('kyouko.defaults')
+local global_defaults = require('audio-recording.defaults')
 
 --- Generates a Pipewire source.
 --- This requires `pw-record` installed.
