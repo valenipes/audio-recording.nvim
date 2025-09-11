@@ -1,0 +1,66 @@
+# 🎤 audio-recording.nvim
+
+Based on [kyouko.nvim](https://github.com/andry-dev/kyouko.nvim/blob/master/README.md) by [@andry-dev](https://github.com/andry-dev).
+
+Pre-alpha plugin to record lectures from within Neovim.
+
+This plugin allows you to record audio from your microphone from within Neovim and also insert the current timestamp as an [extmark](https://neovim.io/doc/user/api.html#extmarks).
+
+A typical use-case is for taking notes for a lecture: maybe you want to record the lecture but you don't want to guess where a passage is in the audio file.
+
+With audio-recording.nvim you can annotate - manually or automatically - where exactly a phrase in the lecture was said, so it's easier to find later on.
+
+## Requirements
+
+Right now, the plugin only works with Linux (Pipewire) and with `opus-tools` installed (needs `opusenc`).
+
+This plugin uses Plenary's Job API, so you need [plenary.nvim](nvim-lua/plenary.nvim) installed.
+
+## Installation
+
+For [lazy.nvim](https://github.com/folke/lazy.nvim):
+
+```lua
+{
+    'valenipes/audio-recording.nvim',
+    dependencies = {
+        'nvim-lua/plenary.nvim'
+    }
+}
+```
+
+For [Packer](https://github.com/wbthomason/packer.nvim):
+
+```lua
+use {
+    'valenipes/audio-recording.nvim',
+    requires = {
+        'nvim-lua/plenary.nvim'
+    }
+}
+```
+
+And you're done! Just use one of the subcommands of `:rec`:
+
+ - `:rec start` starts recording from your main microphone.
+   The recording is saved inside a `.recordings/` directory in the current working directory. The name of the file is generated from the current ISO date and time and its extension is OGG (Opus/Vorbis).
+
+   <!-- Only in debug mode, FIXME -->
+   <!-- A buffer will be created with URI `rec://` where you can see some  -->
+   <!-- info about the recording.  -->
+
+ - `:rec annotate` adds the current timestamp as an extmark at the end of the line. This is useful when taking lecture notes to know where in the recording a passage was said.
+
+ - `:rec stop` stops the current recording.
+
+   <!-- This does not close the `rec://` buffer. -->
+
+## WIP
+ 
+ - [ ] Make it customizable.
+ - [ ] Associate a word to a timestamp and play the audio from there.
+
+## TODO
+
+ - [ ] Support other sound servers.
+
