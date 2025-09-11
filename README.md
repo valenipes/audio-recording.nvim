@@ -50,7 +50,14 @@ And you're done! Just use one of the subcommands of `:Rec`:
    <!-- info about the recording.  -->
 
 
+
+https://github.com/user-attachments/assets/5e68e388-83c0-41bf-acb6-6174ea58261f
+
+
  - `:Rec annotate` adds the current timestamp as an extmark at the end of the line. This is useful when taking lecture notes to know where in the recording a passage was said. Extmarks are saved on a file generated inside `.recordings/`.
+
+
+https://github.com/user-attachments/assets/6570367f-f36d-42c2-8f2b-a77a1f19cb36
 
 
  - `:Rec stop` stops the current recording.
