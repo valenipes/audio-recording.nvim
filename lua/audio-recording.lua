@@ -284,7 +284,7 @@ vim.keymap.set('n', 'dd', function()
 end, { silent = true })
 
 local function setup_commands()
-   vim.api.nvim_create_user_command('rec', function(opt)
+   vim.api.nvim_create_user_command('Rec', function(opt)
       if #opt.fargs == 0 then
          return
       end
