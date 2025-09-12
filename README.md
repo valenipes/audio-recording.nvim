@@ -21,23 +21,30 @@ This plugin uses Plenary's Job API, so you need [plenary.nvim](nvim-lua/plenary.
 For [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
-{
+return {
     'valenipes/audio-recording.nvim',
-    dependencies = {
-        'nvim-lua/plenary.nvim'
-    }
+    dependencies = { 'nvim-lua/plenary.nvim' },
+    opts = {
+      recording_dir = '.recordings/', -- directory path for recordings and extmarks
+      debug_mode = false, -- if true, it will generate a buffer with some info on current recording
+    },
 }
 ```
 
-For [Packer](https://github.com/wbthomason/packer.nvim):
+For [Packer](https://github.com/wbthomason/packer.nvim) (not tested):
 
 ```lua
 use {
-    'valenipes/audio-recording.nvim',
-    requires = {
-        'nvim-lua/plenary.nvim'
-    }
+  'valenipes/audio-recording.nvim',
+  requires = { 'nvim-lua/plenary.nvim' },
+  config = function()
+    require('audio-recording').setup({
+      recording_dir = '.recordings/', -- directory path for recordings and extmarks
+      debug_mode = false, -- if true, it will generate a buffer with some info on current recording
+    })
+  end,
 }
+
 ```
 
 And you're done! Just use one of the subcommands of `:Rec`:

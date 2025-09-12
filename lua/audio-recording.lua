@@ -26,10 +26,38 @@ local M = {
    }
 }
 
+-- Customization
+
+local function normalize_config(cfg)
+   cfg.recording_dir = vim.fn.expand(cfg.recording_dir or M.config.recording_dir)
+   if cfg.recording_dir:sub(-1) ~= '/' then -- needed because plugin only hanldes correctly paths ending with /
+      cfg.recording_dir = cfg.recording_dir .. '/'
+   end
+   if type(cfg.debug_mode) ~= 'boolean' then
+      cfg.debug_mode = M.config.debug_mode
+   end
+   return cfg
+end
+
+function M.setup(user_config)
+   user_config = user_config or {}
+   M.config = vim.tbl_deep_extend('force', {}, M.config, user_config)
+   M.config = normalize_config(M.config)
+end
+
+-- test configuration:
+-- M.setup({
+--    recording_dir = '.test',
+--    debug_mode = true,
+-- })
+
+
+-- End customization
+
 M._ns = M._ns or vim.api.nvim_create_namespace("audio_rec_extmarks")
 
 function M:create_new_buf(filename)
-if not self.config.debug_mode then return end
+   if not self.config.debug_mode then return end
 
    if not self.debug_buffer then
       self.debug_buffer = {
@@ -39,7 +67,6 @@ if not self.config.debug_mode then return end
    vim.api.nvim_buf_set_name(self.debug_buffer.bufnr, 'rec://' .. filename)
 end
 
-
 function M:write_to_buf(callback)
    if not self.debug_buffer then return end
 
@@ -48,23 +75,22 @@ function M:write_to_buf(callback)
    vim.api.nvim_buf_set_option(self.debug_buffer.bufnr, 'modifiable', false)
 end
 
-
 function M:get_filename()
    local current_bufnr = vim.api.nvim_get_current_buf()
    local current_buf_full_path = vim.api.nvim_buf_get_name(current_bufnr)
    self.state.filename = vim.fn.fnamemodify(current_buf_full_path, ":t") -- file name with filetype
 end
 
-
 function M:get_extmarks_path()
-   self.state.extmarks_path = self.config.recording_dir .. "/" .. self.state.filename .. "_extmarks" .. ".lua" -- file where to save extmarks
+   self.state.extmarks_path = self.config.recording_dir ..
+       "/" ..
+       self.state.filename ..
+       "_extmarks" .. ".lua" -- file where to save extmarks
 end
-
 
 function M:get_current_bufnr()
    self.state.current_bufnr = vim.api.nvim_get_current_buf()
 end
-
 
 function M:new_job(source, encoder, audio_filename)
    if self.state.is_recording_ongoing then return end
@@ -95,9 +121,7 @@ function M:new_job(source, encoder, audio_filename)
    })
 end
 
-
 function M:save_marks_for_buf(current_bufnr)
-
    if not self.state.extmarks_path then
       vim.notify("No extmarks file.")
       return
@@ -128,7 +152,6 @@ function M:save_marks_for_buf(current_bufnr)
    f:close()
 end
 
-
 function M:start_recording(source, encoder)
    if self.state.is_recording_ongoing then
       vim.notify("audio-recording: Already recording!")
@@ -140,7 +163,8 @@ function M:start_recording(source, encoder)
 
 
    self.state.start_timestamp = os.time()
-   self.state.audio_filename = self.config.recording_dir .. self.state.filename .. "_" .. format_timestamp(self.state.start_timestamp)  .. '.ogg'
+   self.state.audio_filename = self.config.recording_dir ..
+       self.state.filename .. "_" .. format_timestamp(self.state.start_timestamp) .. '.ogg'
 
    vim.fn.mkdir(self.config.recording_dir, 'p')
 
@@ -155,7 +179,8 @@ function M:start_recording(source, encoder)
       self:create_new_buf(self.state.filename)
       self:write_to_buf(function(debug_bufnr)
          local lines = {
-            'File name: ' .. self.state.filename , 'Recording to: ' .. self.state.audio_filename, 'Using "' .. source.name() .. '" as the source and "' .. encoder.name() .. '" as the encoder with these settings:',
+            'File name: ' .. self.state.filename, 'Recording to: ' .. self.state.audio_filename, 'Using "' ..
+         source.name() .. '" as the source and "' .. encoder.name() .. '" as the encoder with these settings:',
          }
          local opts_str = vim.split(vim.inspect(encoder.opts), '\n', { trimempty = true })
          for _, v in pairs(opts_str) do
@@ -176,7 +201,6 @@ function M:stop_recording()
    self.state.is_recording_ongoing = false
    vim.notify("audio-recording: recording finished!")
 end
-
 
 local function clear_marks_for_buf(current_bufnr)
    current_bufnr = current_bufnr or vim.api.nvim_get_current_buf()
@@ -208,26 +232,26 @@ local function load_marks_for_buf(current_bufnr)
    end
 end
 
-vim.api.nvim_create_autocmd({ "BufReadPost" }, {  -- removed "BufWinEnter" since it's redundant
+vim.api.nvim_create_autocmd({ "BufReadPost" }, { -- removed "BufWinEnter" since it's redundant
    callback = function()
-        pcall(function() M:get_filename() end)
-        pcall(function() M:get_extmarks_path() end)
-        pcall(function() M:get_current_bufnr() end)
-      if vim.fn.glob(M.state.extmarks_path) ~= ""  then -- if the file extmarks_path exists
+      pcall(function() M:get_filename() end)
+      pcall(function() M:get_extmarks_path() end)
+      pcall(function() M:get_current_bufnr() end)
+      if vim.fn.glob(M.state.extmarks_path) ~= "" then -- if the file extmarks_path exists
          pcall(load_marks_for_buf, M.current_bufnr)
       end
    end,
 })
 
 vim.api.nvim_create_autocmd("BufWritePost", {
-  pattern = "*",
-  callback = function(args)
-    local bufnr = args.buf
-    local ok, err = pcall(function() M:save_marks_for_buf(bufnr) end)
-    if not ok then
-      vim.notify("save_marks_for_buf failed: " .. tostring(err), vim.log.levels.WARN)
-    end
-  end,
+   pattern = "*",
+   callback = function(args)
+      local bufnr = args.buf
+      local ok, err = pcall(function() M:save_marks_for_buf(bufnr) end)
+      if not ok then
+         vim.notify("save_marks_for_buf failed: " .. tostring(err), vim.log.levels.WARN)
+      end
+   end,
 })
 
 
@@ -253,7 +277,8 @@ function M:annotate(opts)
       local cursor = vim.api.nvim_win_get_cursor(0)
       local row = cursor[1] - 1
       local col = 0
-      local line_text = string.format(opts.format, timestamp .. " - Rec " ..  os.date('%Y-%m-%d_%H:%M:%S', self.state.start_timestamp))
+      local line_text = string.format(opts.format,
+         timestamp .. " - Rec " .. os.date('%Y-%m-%d_%H:%M:%S', self.state.start_timestamp))
 
       -- sets extmark at the end of the line
       vim.api.nvim_buf_set_extmark(0, M._ns, row, col, {
@@ -261,26 +286,24 @@ function M:annotate(opts)
          virt_text_pos = "eol",
          hl_mode = "combine",
       })
---      pcall(function() self:save_marks_for_buf(self.state.current_bufnr) end)
+      --      pcall(function() self:save_marks_for_buf(self.state.current_bufnr) end)
    end
 
    return timestamp
 end
 
-
-
 local function del_extmarks_on_cursor()
-  local bufnr = vim.api.nvim_get_current_buf()
-  local row = vim.api.nvim_win_get_cursor(0)[1] - 1
-  local ext = vim.api.nvim_buf_get_extmarks(bufnr, M._ns, {row, 0}, {row, -1}, {})
-  for _, m in ipairs(ext) do
-    vim.api.nvim_buf_del_extmark(bufnr, M._ns, m[1])
-  end
+   local bufnr = vim.api.nvim_get_current_buf()
+   local row = vim.api.nvim_win_get_cursor(0)[1] - 1
+   local ext = vim.api.nvim_buf_get_extmarks(bufnr, M._ns, { row, 0 }, { row, -1 }, {})
+   for _, m in ipairs(ext) do
+      vim.api.nvim_buf_del_extmark(bufnr, M._ns, m[1])
+   end
 end
 
 vim.keymap.set('n', 'dd', function()
-  del_extmarks_on_cursor()
-  vim.api.nvim_command('normal! dd')
+   del_extmarks_on_cursor()
+   vim.api.nvim_command('normal! dd')
 end, { silent = true })
 
 local function setup_commands()
