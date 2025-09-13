@@ -16,18 +16,28 @@ Right now, the plugin only works with Linux (Pipewire) and with `opus-tools` ins
 
 This plugin uses Plenary's Job API, so you need [plenary.nvim](nvim-lua/plenary.nvim) installed.
 
-## Installation
+## Installation and configuration
 
 For [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 return {
-    'valenipes/audio-recording.nvim',
-    dependencies = { 'nvim-lua/plenary.nvim' },
-    opts = {
+   'valenipes/audio-recording.nvim',
+   lazy = false,
+   dependencies = {
+      'nvim-lua/plenary.nvim'
+   },
+   opts = {
       recording_dir = '.recordings/', -- directory path for recordings and extmarks
-      debug_mode = false, -- if true, it will generate a buffer with some info on current recording
-    },
+      debug_mode = false,             -- if true, it will generate a buffer with some info on current recording
+      auto_load_extmarks = true,      -- if true, it will load extmarks from previous 
+   },
+   -- Uncomment and customize if needed.
+   -- keys = {
+   --    { "<leader>r", "<cmd>Rec start<cr>", desc = "Start a recording." },
+   --    { "<leader>a", "<cmd>Rec annotate<cr>", desc = "Insert timestamp as an extmark at the end of the line." },
+   --    { "<leader>s", "<cmd>Rec stop<cr>", desc = "Stop a recording." },
+   -- }
 }
 ```
 
@@ -40,11 +50,14 @@ use {
   config = function()
     require('audio-recording').setup({
       recording_dir = '.recordings/', -- directory path for recordings and extmarks
-      debug_mode = false, -- if true, it will generate a buffer with some info on current recording
+      debug_mode = false,             -- if true, it will generate a buffer with some info on current recording
+      auto_load_extmarks = true,      -- if true, it will load extmarks from previous 
     })
-  end,
+    -- { "<leader>r", "<cmd>Rec start<cr>", desc = "Start a recording." },
+    -- { "<leader>a", "<cmd>Rec annotate<cr>", desc = "Insert timestamp as an extmark at the end of the line." },
+    -- { "<leader>s", "<cmd>Rec stop<cr>", desc = "Stop a recording." },
+  end
 }
-
 ```
 
 And you're done! Just use one of the subcommands of `:Rec`:

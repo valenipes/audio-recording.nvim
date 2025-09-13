@@ -38,9 +38,11 @@ function M.setup(core_module)
   vim.api.nvim_create_autocmd('BufWritePost', {
     pattern = '*',
     callback = function(args)
-      local bufnr = args.buf
-      pcall(function() core_module:save_marks_for_buf(bufnr) end)
-    end,
+      if vim.fn.filereadable(vim.fn.expand(core_module.state.extmarks_path)) == 1 or core_module.state.has_the_user_added_extmarks then
+         local bufnr = args.buf
+         pcall(function() core_module:save_marks_for_buf(bufnr) end)
+      end
+    end
   })
 end
 

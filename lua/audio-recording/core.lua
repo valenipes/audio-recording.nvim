@@ -155,7 +155,10 @@ function M:stop_recording()
 end
 
 function M:annotate(opts)
-  if not self.state.is_recording_ongoing then return end
+  if not self.state.is_recording_ongoing then
+      vim.notify("audio-recording: cannot annotate, no recording ongoing.")
+      return
+   end
   self.state.has_the_user_added_extmarks = true
   opts = opts or {}
   local default_opts = { format = ' [%s] ', insert_text = true }
