@@ -73,10 +73,11 @@ https://github.com/user-attachments/assets/6570367f-f36d-42c2-8f2b-a77a1f19cb36
 
 ## WIP
  
- - [ ] Make it customizable.
+ - [ ] Add an option to insert a timestamp on each <CR> in insert mode.
  - [ ] Associate a word to a timestamp and play the audio from there.
 
 ## TODO
 
  - [ ] Support other sound servers.
+ - [ ] Keybindings.
 

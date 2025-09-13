@@ -163,8 +163,7 @@ function M:start_recording(source, encoder)
 
 
    self.state.start_timestamp = os.time()
-   self.state.audio_filename = self.config.recording_dir ..
-       self.state.filename .. "_" .. format_timestamp(self.state.start_timestamp) .. '.ogg'
+   self.state.audio_filename = self.config.recording_dir .. self.state.filename .. "_" .. format_timestamp(self.state.start_timestamp) .. '.ogg'
 
    vim.fn.mkdir(self.config.recording_dir, 'p')
 
