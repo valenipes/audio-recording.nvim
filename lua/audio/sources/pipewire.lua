@@ -1,4 +1,3 @@
-
 local global_defaults = require('audio.defaults')
 
 --- Generates a Pipewire source.

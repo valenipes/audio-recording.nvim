@@ -1,7 +1,9 @@
 local defaults = {
   recording_dir = '.recordings/',
-  debug_mode = true,
+  debug_mode = false,
   auto_load_extmarks = true,
+  manual_annotation_mode = true,
+  automatic_annotation_word_mode = true, -- not extensively tested
 }
 
 local M = {
@@ -18,6 +20,12 @@ local function normalize_config(cfg)
   end
   if type(cfg.auto_load_extmarks) ~= 'boolean' then
     cfg.auto_load_extmarks = defaults.auto_load_extmarks
+  end
+  if type(cfg.manual_annotation_mode) ~= 'boolean' then
+    cfg.manual_annotation_mode = defaults.manual_annotation_mode
+  end
+  if type(cfg.automatic_annotation_word_mode) ~= 'boolean' then
+    cfg.automatic_annotation_word_mode = defaults.automatic_annotation_word_mode
   end
   return cfg
 end

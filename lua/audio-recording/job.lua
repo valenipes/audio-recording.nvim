@@ -1,31 +1,80 @@
-local Job = require('plenary.job')
 local debug_buf = require('audio-recording.debug_buf')
+local vim_schedule = vim.schedule_wrap
 
 local M = {}
 
+-- Simple job wrapper using vim.fn.jobstart for sh -c "<cmd>"
 function M.new_shell_job(self, source, encoder, audio_filename, on_exit)
-  local cmd = string.format('%s | %s', source:cmd(), encoder:cmd(audio_filename))
-  local j = Job:new({
-    command = 'sh',
-    args = { '-c', cmd },
-    on_stdout = vim.schedule_wrap(function(_, data, _)
-      if data ~= nil and debug_buf then
+  local cmd = string.format('%s | %s 2>/dev/null', source:cmd(), encoder:cmd(audio_filename))
+
+  local job = {
+    jid = nil,
+    cmd = cmd,
+    on_exit = on_exit,
+    running = false,
+  }
+
+  local function handle_stdout(_, data, _)
+    if data and #data > 0 and debug_buf then
+      vim_schedule(function()
         debug_buf.write(function(bufnr)
-          vim.api.nvim_buf_set_lines(bufnr, -1, -1, true, { data })
+          for _, line in ipairs(data) do
+            if line ~= '' then
+              vim.api.nvim_buf_set_lines(bufnr, -1, -1, true, { line })
+            end
+          end
         end)
-      end
-    end),
-    on_exit = vim.schedule_wrap(function(_, code)
+      end)
+    end
+  end
+
+  local function handle_exit(_, code, _)
+    vim_schedule(function()
       if debug_buf then
         debug_buf.write(function(bufnr)
           local out = string.format('Recording "%s" finished (exit=%s)', audio_filename, tostring(code))
           vim.api.nvim_buf_set_lines(bufnr, -1, -1, true, { out })
         end)
       end
-      if type(on_exit) == 'function' then pcall(on_exit, code) end
-    end),
-  })
-  return j
+      if type(job.on_exit) == 'function' then pcall(job.on_exit, code) end
+    end)
+    job.running = false
+    job.jid = nil
+  end
+
+  function job:start()
+    if self.running then return end
+    -- jobstart expects a command/table; use shell -c to evaluate piping
+    local opts = {
+      stdout_buffered = true,
+      on_stdout = handle_stdout,
+      on_stderr = function() end,
+      on_exit = handle_exit,
+    }
+    local ok, jid = pcall(function()
+      return vim.fn.jobstart({ 'sh', '-c', self.cmd }, opts)
+    end)
+    if ok and jid and jid > 0 then
+      self.jid = jid
+      self.running = true
+      return true
+    else
+      return false
+    end
+  end
+
+  function job:shutdown()
+    if self.jid and vim.fn.jobwait({ self.jid }, 0)[1] == -1 then
+      -- if still running, try to stop it
+      pcall(function() vim.fn.jobstop(self.jid) end)
+    end
+    self.running = false
+    self.jid = nil
+  end
+
+  function job:strip_internal_buffers() end
+
+  return job
 end
 
 return M
