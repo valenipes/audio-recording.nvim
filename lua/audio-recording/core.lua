@@ -4,6 +4,9 @@ local debug_buf = require('audio-recording.debug_buf')
 
 local PWSource = require('audio.sources.pipewire')
 local OpusEncoder = require('audio.encoders.opus')
+-- Utilities to debug: 
+-- List of namespaces -- :lua print(vim.inspect(vim.api.nvim_get_namespaces())) 
+-- Check content of namespace -- :lua print(vim.inspect(vim.api.nvim_buf_get_extmarks(0, ns_id, 0, -1, { details =true }) or {}))
 
 local M = {
    config = {},
@@ -17,7 +20,7 @@ local M = {
       is_recording_ongoing = false,
       append_ext_to_word = {
          in_word = false,
-         start_rot = nil,
+         start_row = nil,
          start_col = nil,
       },
       player_pid = nil,
@@ -33,44 +36,54 @@ local M = {
    }
 }
 
-M.manual_ns = vim.api.nvim_create_namespace('manual_extmarks')
-M.automatic_word_ns = vim.api.nvim_create_namespace('automatic_word_extmarks')
+-- These functions return the namespace id
+M.manual_ns = vim.api.nvim_create_namespace('audio_recording.manual_extmarks')
+M.automatic_word_ns = vim.api.nvim_create_namespace('audio_recording.automatic_word_extmarks')
 
----
 local function get_text_range(bufnr, srow, scol, erow, ecol)
+   -- FIXME: srow's and erow's clamping is useless, substitute with a =~ nil check, >0 check and also insert the corresponding errors.
    bufnr = bufnr or vim.api.nvim_get_current_buf()
-   -- clamp
-   local line_count = vim.api.nvim_buf_line_count(bufnr)
-   srow = math.max(0, math.min(srow or 0, line_count - 1))
-   erow = math.max(0, math.min(erow or srow, line_count - 1))
-
+   local line_count = vim.api.nvim_buf_line_count(bufnr) -- total number of lines in the buffer
+   srow = math.max(0, math.min(srow or 0, line_count - 1)) -- starting row
+   erow = math.max(0, math.min(erow or srow, line_count - 1)) -- ending row, for a certain word, should always be the same of srow
    if srow == erow then
-      local line = vim.api.nvim_buf_get_lines(bufnr, srow, srow + 1, true)[1] or ""
-      local start_col = math.max(0, math.min(scol or 0, #line))
+      local line = vim.api.nvim_buf_get_lines(bufnr, srow, srow + 1, true)[1] or "" -- returns the line
+      local start_col = math.max(0, math.min(scol or 0, #line)) -- #line is the total number of columns
       local end_col = math.max(0, math.min(ecol or start_col, #line))
       return string.sub(line, start_col + 1, end_col)
+   else
+      vim.notify("audio-recording: extmark's start row not equal to end row, no range returned", vim.log.levels.WARN)
    end
-
-   local lines = vim.api.nvim_buf_get_lines(bufnr, srow, erow + 1, true)
-   if #lines == 0 then return "" end
-   -- adjust first and last
-   lines[1] = string.sub(lines[1], (scol or 0) + 1)
-   lines[#lines] = string.sub(lines[#lines], 1, ecol or #lines[#lines])
-   return table.concat(lines, "\n")
 end
 
-function M:prune_extmarks_by_word_match(bufnr)
-   bufnr = bufnr or self.state.current_bufnr or vim.api.nvim_get_current_buf()
+local function prune_extmarks_by_word_match(bufnr)
+   -- FIXME: prune_extmarks_by_word_match iterates inside namespaces, but it should iterate in M.extmarks_table, because it must be persistent and namespaces are not.
+   bufnr = bufnr or vim.api.nvim_get_current_buf()
+   local existing_ext_table = {}
 
-   -- build a map of existing extmarks returned by buffer to their details by id
-   local existing = {}
-   local function collect_from_ns(ns)
-      local raw = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, { details = true }) or {}
+   local function collect_from_ns(ns_id)
+      local raw = vim.api.nvim_buf_get_extmarks(bufnr, ns_id, 0, -1, { details = true }) or {} -- with the interval (0,-1), returns all extmarks
+
+      -- Typical raw structure of an extmark:
+      -- { { 1, 0, 49, {
+      --   end_col = 53,
+      --   end_right_gravity = false,
+      --   end_row = 0,
+      --   ns_id = 13,
+      --   right_gravity = true
+      -- } }, { 2, 0, 54, {
+      --   end_col = 58,
+      --   end_right_gravity = false,
+      --   end_row = 0,
+      --   ns_id = 13,
+      --   right_gravity = true
+      -- } } }
       for _, r in ipairs(raw) do
          local id = r[1]
-         local srow = r[2]; local scol = r[3]
+         local srow = r[2]
+         local scol = r[3]
          local details = r[4] or {}
-         existing[id] = {
+         existing_ext_table[id] = {
             start_row = srow,
             start_col = scol,
             end_row = details.end_row or srow,
@@ -80,35 +93,34 @@ function M:prune_extmarks_by_word_match(bufnr)
       end
    end
 
-   collect_from_ns(self.manual_ns)
-   collect_from_ns(self.automatic_word_ns)
+   collect_from_ns(M.manual_ns)
+   collect_from_ns(M.automatic_word_ns)
 
-   -- iterate backwards to safely remove entries
-   for i = #self.extmarks_table, 1, -1 do
-      local e = self.extmarks_table[i]
+   -- here begins the pruning of the table
+   for i = #M.extmarks_table, 1, -1 do -- iterates in all extmarks collected since now
+      local e = M.extmarks_table[i]
       if not e or not e.id then
-         table.remove(self.extmarks_table, i)
+         table.remove(M.extmarks_table, i)
       else
-         local info = existing[e.id]
+         local info = existing_ext_table[e.id]
          if not info then
-            -- extmark id non presente nel buffer -> rimuovi
-            table.remove(self.extmarks_table, i)
+            table.remove(M.extmarks_table, i)
          else
-            -- se metadata.word è presente, confrontalo con il testo attuale nella regione
-            local expected_word = e.metadata and e.metadata.word
+            local expected_word = e.metadata and e.metadata.word -- if e.metadata exists, it accesses e.metadata.word
+            -- here checks if the extmark "e" in the extmarks_table is the same as the extmark in the namespace by comparing the word, if not it is deleted
             if expected_word and expected_word ~= "" then
                local actual = get_text_range(bufnr, info.start_row, info.start_col, info.end_row, info.end_col) or ""
                if actual ~= expected_word then
-                  table.remove(self.extmarks_table, i)
-               else
-                  -- opzionale: aggiorna posizione nella tabella con quella corrente
+                  table.remove(M.extmarks_table, i)
+                  -- print("Table removed")
+               else -- update location
                   e.row = info.start_row
                   e.col = info.start_col
                   e.end_row = info.end_row
                   e.end_col = info.end_col
                end
             else
-               -- se non esiste metadata.word, tieni ma aggiorna posizione
+               -- if metadata.word doesn't exist, update the location -- I don't understand why.. if the word doesn't exist then the extmark should be deleted...
                e.row = info.start_row
                e.col = info.start_col
                e.end_row = info.end_row
@@ -119,7 +131,6 @@ function M:prune_extmarks_by_word_match(bufnr)
    end
 end
 
----
 
 function M:play_current_mark()
    local bufnr = vim.api.nvim_get_current_buf()
@@ -163,7 +174,7 @@ function M:play_current_mark()
    end
 
    if not found then
-      vim.notify("audio-recording: no extmark under cursor", vim.log.levels.INFO)
+      vim.notify("audio-recording: no extmark under cursor", vim.log.levels.WARN)
       return
    end
 
@@ -215,26 +226,14 @@ function M:play_current_mark()
       self.state.player_pid = jid
    end
 
-   vim.notify("audio-recording: playing " ..
-      recording .. (timestamp and timestamp ~= '' and (" from " .. timestamp) or ""))
+   vim.notify("audio-recording: playing " .. recording .. (timestamp and timestamp ~= '' and (" from " .. timestamp) or ""), vim.log.levels.INFO)
 
-   -- -- avvia mpv in background (non bloccante)
-   -- local ok, jid = pcall(function()
-   --    return vim.fn.jobstart(cmd, { detach = true })
-   -- end)
-   --
-   -- if not ok or not jid or jid == 0 then
-   --    vim.notify("audio-recording: failed to start mpv: " .. tostring(jid), vim.log.levels.ERROR)
-   --    return
-   -- end
-   --
-   -- vim.notify("audio-recording: playing " .. recording .. (timestamp and timestamp ~= '' and (" from " .. timestamp) or ""))
 end
 
 function M:kill_player()
    local pid = self.state.player_pid
    if not pid or pid == 0 then
-      vim.notify("audio-recording: no player pid known to kill", vim.log.levels.WARN)
+      vim.notify("audio-recording: no player pid known to kill", vim.log.levels.ERROR)
       return
    end
 
@@ -303,38 +302,6 @@ local function create_extmark(bufnr, srow, scol, erow, ecol)
    return id
 end
 
-
--- local function create_extmark(bufnr, srow, scol, erow, ecol)
---
---    local diff = os.difftime(os.time(), M.state.start_timestamp)
---    local timestamp = os.date('!%T', diff)
---
---    local opts = {
---       end_row = erow,
---       end_col = ecol,
---    }
---    if M.config.debug_mode then
---       utils.ensure_highlight()
---       opts.hl_group = "WordExtmarkDebug"
---       opts.hl_eol = false
---    end
---
---    local id = vim.api.nvim_buf_set_extmark(bufnr, M.automatic_word_ns, srow, scol, opts)
---
---    local details = {
---       erow = erow,
---       ecol = ecol,
---       hl_group = opts.hl_group,
---       hl_eol = opts.hl_eol,
---    }
---    local entry = M:make_extmark_entry(id, srow, scol, details)
---    entry.metadata.timestamp = timestamp
---
---    table.insert(M.extmarks_table, entry)
---
---    return id
--- end
-
 local function close_current_word(final_row, final_col)
    local bufnr = vim.api.nvim_get_current_buf()
    create_extmark(bufnr, M.automatic_word_mode_state.start_row, M.automatic_word_mode_state.start_col, final_row,
@@ -392,13 +359,12 @@ function M.on_insert_leave()
    if not M.automatic_word_mode_state.in_word then return end
    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
    row = row - 1
-   local final_row, final_col = row, math.max(0, col - 1)
+   local final_row, final_col = row, math.max(0, col + 1)
    close_current_word(final_row, final_col)
+   print(final_row, final_col)
 end
 
----
-
-function M.get_extmarks_table() -- for debugging purposes
+function M.get_extmarks_table()
    return M.extmarks_table
 end
 
@@ -419,6 +385,7 @@ function M:make_extmark_entry(id, srow, scol, details) -- s stands for starting 
       metadata = {
          recording = self.state.audio_filename,
          timestamp = nil,
+         word = nil,
       }
    }
    return entry
@@ -475,12 +442,8 @@ function M:save_marks_for_buf(bufnr)
       end
    end
 
-   -- === PRUNE BY WORD MATCH ===
-   -- Assumo che tu abbia aggiunto la funzione M:prune_extmarks_by_word_match(bufnr)
-   -- (o la funzione locale con lo stesso nome mostrata prima). Qui la invochiamo
    -- DOPO l'aggiornamento delle posizioni e PRIMA della scrittura su file.
-   pcall(function() self:prune_extmarks_by_word_match(bufnr) end)
-   -- === END PRUNE ===
+   pcall(function() prune_extmarks_by_word_match(bufnr) end)
 
    local ok, err = utils.safe_write_file(self.state.extmarks_path, "return " .. vim.inspect(self.extmarks_table))
    if not ok then
@@ -488,45 +451,12 @@ function M:save_marks_for_buf(bufnr)
    end
 end
 
--- function M:save_marks_for_buf(bufnr)
---    bufnr = bufnr or self.state.current_bufnr or vim.api.nvim_get_current_buf()
---    if not self.state.extmarks_path then
---       vim.notify("No extmarks file.", vim.log.levels.WARN)
---       return
---    end
---
---    local raw = vim.api.nvim_buf_get_extmarks(bufnr, self.manual_ns, 0, -1, { details = true })
---    local id_map = {}
---    for _, m in ipairs(raw) do
---       id_map[m[1]] = {
---          row = m[2],
---          col = m[3],
---          details = m[4] or {}
---       }
---    end
---
---    for _, entry in ipairs(self.extmarks_table) do
---       local info = id_map[entry.id]
---       if info then
---          entry.row = info.row
---          entry.col = info.col
---          local d = info.details
---          entry.virt_text = d.virt_text or entry.virt_text
---          entry.virt_text_pos = d.virt_text_pos or entry.virt_text_pos
---          entry.hl_mode = d.hl_mode or entry.hl_mode
---          entry.right_gravity = d.right_gravity or entry.right_gravity
---       end
---    end
---
---    local ok, err = utils.safe_write_file(self.state.extmarks_path, "return " .. vim.inspect(self.extmarks_table))
---    if not ok then
---       vim.notify("audio-recording: cannot write annotation marks: " .. tostring(err), vim.log.levels.WARN)
---    end
--- end
-
 function M:load_marks_for_buf(bufnr)
    bufnr = bufnr or vim.api.nvim_get_current_buf()
-   if not self.state.extmarks_path or vim.fn.filereadable(self.state.extmarks_path) == 0 then return end
+   if not self.state.extmarks_path or vim.fn.filereadable(self.state.extmarks_path) == 0 then
+      vim.notify("audio-recording: extmarks file doesn't exist or isn't readable", vim.log.levels.WARN)
+      return
+   end
    local ok, marks = pcall(dofile, self.state.extmarks_path)
    if not ok or type(marks) ~= 'table' then
       vim.notify("audio-recording: failed to load extmarks for buffer", vim.log.levels.WARN)
@@ -535,7 +465,7 @@ function M:load_marks_for_buf(bufnr)
 
    self.extmarks_table = marks
 
-   pcall(vim.api.nvim_buf_clear_namespace, bufnr, self.manual_ns, 0, -1)
+   pcall(vim.api.nvim_buf_clear_namespace, bufnr, self.automatic_word_ns, 0, -1)
    local line_count = vim.api.nvim_buf_line_count(bufnr)
    for _, m in ipairs(marks) do
       local row = math.max(0, math.min(m.row or 0, line_count - 1))
@@ -559,7 +489,7 @@ function M:load_marks_for_buf(bufnr)
       end
 
       local ok2, new_id, err = pcall(function()
-         return vim.api.nvim_buf_set_extmark(bufnr, self.manual_ns, row, col, opts)
+         return vim.api.nvim_buf_set_extmark(bufnr, self.automatic_word_ns, row, col, opts)
       end)
       if not ok2 or not new_id then
          vim.notify("audio-recording: failed to set extmark: " .. tostring(new_id or err), vim.log.levels.WARN)
@@ -578,7 +508,7 @@ end
 
 function M:start_recording(source, encoder)
    if self.state.is_recording_ongoing then
-      vim.notify("audio-recording: Already recording!")
+      vim.notify("audio-recording: Already recording!", vim.log.levels.WARN)
       return
    end
 
@@ -607,8 +537,8 @@ function M:start_recording(source, encoder)
    end
 
    if self.config.debug_mode then
-      debug_buf.create(fname)
-      debug_buf.write(function(bufnr)
+      debug_buf.create()
+      debug_buf.write(function()
          local lines = {
             'File name: ' .. tostring(fname),
             'Recording to: ' .. tostring(self.state.audio_filename),
@@ -618,14 +548,14 @@ function M:start_recording(source, encoder)
          }
          local opts_str = vim.split(vim.inspect(encoder.opts), '\n', { trimempty = true })
          for _, v in ipairs(opts_str) do table.insert(lines, v) end
-         vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+         return lines
       end)
    end
 end
 
 function M:stop_recording()
    if not self.state.is_recording_ongoing then
-      vim.notify("audio-recording: no recording started yet.")
+      vim.notify("audio-recording: no recording started yet.", vim.log.levels.WARN)
       return
    end
    if self.jobs.shell then
@@ -635,16 +565,16 @@ function M:stop_recording()
    if self.config.automatic_annotation_word_mode then
       pcall(function() self:disable_word_autocmds() end)
    end
-   vim.notify("audio-recording: recording finished!")
+   print("audio-recording: recording finished!")
 end
 
 function M:annotate(opts)
    if not self.config.manual_annotation_mode then
-      vim.notify("audio-recording: cannot annotate, manual_annotation_mode set to false in configuration file.")
+      vim.notify("audio-recording: cannot annotate, manual_annotation_mode set to false in configuration file.", vim.log.levels.ERROR)
       return
    end
    if not self.state.is_recording_ongoing then
-      vim.notify("audio-recording: cannot annotate, no recording ongoing.")
+      vim.notify("audio-recording: cannot annotate, no recording ongoing.", vim.log.levels.ERROR)
       return
    end
 
@@ -689,7 +619,7 @@ end
 
 function M.enable_word_autocmds()
    vim.cmd([[
-    augroup WordExtmarkPlugin
+    augroup audio_recording_word
     autocmd!
     autocmd TextChangedI * lua require('audio-recording.core').on_text_changed_i()
     autocmd InsertLeave * lua require('audio-recording.core').on_insert_leave()

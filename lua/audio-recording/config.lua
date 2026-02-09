@@ -17,15 +17,19 @@ local function normalize_config(cfg)
   end
   if type(cfg.debug_mode) ~= 'boolean' then
     cfg.debug_mode = defaults.debug_mode
+    vim.notify("audio-recording: wrong configuration for debug_mode, replace it with a boolean. Debug mode disabled.", vim.log.levels.WARN)
   end
   if type(cfg.auto_load_extmarks) ~= 'boolean' then
     cfg.auto_load_extmarks = defaults.auto_load_extmarks
+    vim.notify("audio-recording: wrong configuration for auto_load_extmarks, replace it with a boolean. Auto load enabled.", vim.log.levels.WARN)
   end
   if type(cfg.manual_annotation_mode) ~= 'boolean' then
     cfg.manual_annotation_mode = defaults.manual_annotation_mode
+    vim.notify("audio-recording: wrong configuration for manual_annotation_mode, replace it with a boolean. Manual annotation enabled.", vim.log.levels.WARN)
   end
   if type(cfg.automatic_annotation_word_mode) ~= 'boolean' then
     cfg.automatic_annotation_word_mode = defaults.automatic_annotation_word_mode
+    vim.notify("audio-recording: wrong configuration for automatic_annotation_mode, replace it with a boolean. Automatic annotation enabled.", vim.log.levels.WARN)
   end
   return cfg
 end

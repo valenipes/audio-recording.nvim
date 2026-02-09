@@ -17,7 +17,7 @@ function M.setup(core_module)
       elseif cmd == 'killplayer' then
          core_module:kill_player()
       else
-         vim.notify('Uso: :Rec start|stop|annotate|play|killplayer', vim.log.levels.INFO)
+         vim.notify('Usage: :Rec start|stop|annotate|play|killplayer', vim.log.levels.INFO)
       end
    end, {
       nargs = '*',
@@ -33,12 +33,15 @@ function M.setup(core_module)
       vim.api.nvim_command('normal! dd')
    end, { silent = true })
 
-   vim.api.nvim_create_autocmd({ 'BufReadPost', 'BufEnter' }, {
+   -- fixme I'm evaluating if it's better to load everytime a buffer is opened or to load once for all buffers; if this is the case, then it should be created a namespace for each buffer; I have to think about it based on performances
+   local group = vim.api.nvim_create_augroup('audio_recording', { clear = true })
+   vim.api.nvim_create_autocmd({ 'BufEnter' }, {
       callback = function()
-         -- pcall(function() core_module:get_filename() end)
-         -- pcall(function() core_module:get_extmarks_path() end)
-         -- pcall(function() core_module:get_current_bufnr() end)
+         group = group -- needed to load correctly the autocmd, or it will load twice
          if cfg.auto_load_extmarks and core_module.state.extmarks_path and vim.fn.filereadable(core_module.state.extmarks_path) == 1 then
+            if cfg.debug_mode == true then
+               vim.notify('audio_recording: extmarks loaded for the current buffer', vim.log.levels.WARN)
+            end
             pcall(function() core_module:load_marks_for_buf(core_module.state.current_bufnr) end)
          end
       end,
