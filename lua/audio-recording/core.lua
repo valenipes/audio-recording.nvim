@@ -37,7 +37,8 @@ local M = {
    }
 }
 
--- These functions return the namespace id
+-- These functions return the namespace id  
+-- fixme: all extmarks, manual and automatic, are added in the same namespace and saved in the same file _extmarks.lua... for the future, it'd be better to store them in different namespaces saving them in different files. This is needed to avoid conflicts: every namespace has its indices, if multiple extmarks have the same index in the _extmarks.lua, there is conflict based on how the code is written.
 -- M.audio_recording_ns = vim.api.nvim_create_namespace('audio_recording.manual_extmarks')
 M.audio_recording_ns = vim.api.nvim_create_namespace('audio_recording.extmarks')
 
@@ -532,7 +533,7 @@ function M:start_recording(source, encoder)
          pcall(function() self:enable_word_autocmds() end)
          self.state.has_the_user_added_extmarks = true
       end
-      vim.notify("audio-recording: recording started!")
+      print("audio-recording: recording started!")
    else
       vim.notify("audio-recording: failed to create job", vim.log.levels.ERROR)
    end
