@@ -4,8 +4,8 @@ local debug_buf = require('audio-recording.debug_buf')
 
 local PWSource = require('audio.sources.pipewire')
 local OpusEncoder = require('audio.encoders.opus')
--- Utilities to debug: 
--- List of namespaces -- :lua print(vim.inspect(vim.api.nvim_get_namespaces())) 
+-- Utilities to debug:
+-- List of namespaces -- :lua print(vim.inspect(vim.api.nvim_get_namespaces()))
 -- Check content of namespace -- :lua print(vim.inspect(vim.api.nvim_buf_get_extmarks(0, ns_id, 0, -1, { details =true }) or {}))
 -- Check the content of a table -- :lua print(vim.inspect(require("audio-recording.core").extmarks_table))
 
@@ -37,7 +37,7 @@ local M = {
    }
 }
 
--- These functions return the namespace id  
+-- These functions return the namespace id
 -- fixme: all extmarks, manual and automatic, are added in the same namespace and saved in the same file _extmarks.lua... for the future, it'd be better to store them in different namespaces saving them in different files. This is needed to avoid conflicts: every namespace has its indices, if multiple extmarks have the same index in the _extmarks.lua, there is conflict based on how the code is written.
 -- M.audio_recording_ns = vim.api.nvim_create_namespace('audio_recording.manual_extmarks')
 M.audio_recording_ns = vim.api.nvim_create_namespace('audio_recording.extmarks')
@@ -45,12 +45,12 @@ M.audio_recording_ns = vim.api.nvim_create_namespace('audio_recording.extmarks')
 local function get_text_range(bufnr, srow, scol, erow, ecol)
    -- FIXME: srow's and erow's clamping is useless, substitute with a =~ nil check, >0 check and also insert the corresponding errors.
    bufnr = bufnr or vim.api.nvim_get_current_buf()
-   local line_count = vim.api.nvim_buf_line_count(bufnr) -- total number of lines in the buffer
-   srow = math.max(0, math.min(srow or 0, line_count - 1)) -- starting row
-   erow = math.max(0, math.min(erow or srow, line_count - 1)) -- ending row, for a certain word, should always be the same of srow
+   local line_count = vim.api.nvim_buf_line_count(bufnr)                            -- total number of lines in the buffer
+   srow = math.max(0, math.min(srow or 0, line_count - 1))                          -- starting row
+   erow = math.max(0, math.min(erow or srow, line_count - 1))                       -- ending row, for a certain word, should always be the same of srow
    if srow == erow then
       local line = vim.api.nvim_buf_get_lines(bufnr, srow, srow + 1, true)[1] or "" -- returns the line
-      local start_col = math.max(0, math.min(scol or 0, #line)) -- #line is the total number of columns
+      local start_col = math.max(0, math.min(scol or 0, #line))                     -- #line is the total number of columns
       local end_col = math.max(0, math.min(ecol or start_col, #line))
       return string.sub(line, start_col + 1, end_col)
    else
@@ -64,7 +64,8 @@ local function prune_extmarks_by_word_match(bufnr)
    local existing_ext_table = {}
 
    local function collect_from_ns(ns_id)
-      local raw = vim.api.nvim_buf_get_extmarks(bufnr, ns_id, 0, -1, { details = true }) or {} -- with the interval (0,-1), returns all extmarks
+      local raw = vim.api.nvim_buf_get_extmarks(bufnr, ns_id, 0, -1, { details = true }) or
+          {} -- with the interval (0,-1), returns all extmarks
 
       -- Typical raw structure of an extmark:
       -- { { 1, 0, 49, {
@@ -228,8 +229,9 @@ function M:play_current_mark()
       self.state.player_pid = jid
    end
 
-   vim.notify("audio-recording: playing " .. recording .. (timestamp and timestamp ~= '' and (" from " .. timestamp) or ""), vim.log.levels.INFO)
-
+   vim.notify(
+      "audio-recording: playing " .. recording .. (timestamp and timestamp ~= '' and (" from " .. timestamp) or ""),
+      vim.log.levels.INFO)
 end
 
 function M:kill_player()
@@ -325,6 +327,23 @@ function M.remove_extmark_by_id(bufnr, id)
    return false
 end
 
+function M.del_extmarks_on_cursor()
+  local api = vim.api
+  local bufnr = api.nvim_get_current_buf()
+  local win = api.nvim_get_current_win()
+  local pos = api.nvim_win_get_cursor(win)       -- {row, col}, 1-based row
+  local row0 = pos[1] - 1                        -- 0-based
+
+  local marks = api.nvim_buf_get_extmarks(bufnr, M.audio_recording_ns, {row0, 0}, {row0, -1}, {details = false})
+
+  for _, m in ipairs(marks) do
+    local id = m[1]
+    pcall(function() M.remove_extmark_by_id(bufnr, id) end)
+    -- pcall(api.nvim_buf_del_extmark, bufnr, M.audio_recording_ns, id)
+  end
+end
+
+
 function M.on_text_changed_i()
    local bufnr = vim.api.nvim_get_current_buf()
    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
@@ -363,7 +382,9 @@ function M.on_insert_leave()
    row = row - 1
    local final_row, final_col = row, math.max(0, col + 1)
    close_current_word(final_row, final_col)
-   print(final_row, final_col)
+   if M.config.debug_mode then
+      vim.notify("audio_recording: exiting insert mode on row", final_row, "and column", final_col, vim.log.levels.INFO)
+   end
 end
 
 function M.get_extmarks_table()
@@ -572,7 +593,8 @@ end
 
 function M:annotate(opts)
    if not self.config.manual_annotation_mode then
-      vim.notify("audio-recording: cannot annotate, manual_annotation_mode set to false in configuration file.", vim.log.levels.ERROR)
+      vim.notify("audio-recording: cannot annotate, manual_annotation_mode set to false in configuration file.",
+         vim.log.levels.ERROR)
       return
    end
    if not self.state.is_recording_ongoing then

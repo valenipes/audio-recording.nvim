@@ -27,9 +27,11 @@ function M.setup(core_module)
       end,
    })
 
-
    vim.keymap.set('n', 'dd', function()
-      pcall(function() core_module:del_extmarks_on_cursor() end)
+      pcall(function()
+         core_module:del_extmarks_on_cursor()
+         vim.notify("audio_recording: manual annotation deleted", vim.log.levels.INFO)
+      end)
       vim.api.nvim_command('normal! dd')
    end, { silent = true })
 
