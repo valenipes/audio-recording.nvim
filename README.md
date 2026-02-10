@@ -99,6 +99,10 @@ https://github.com/user-attachments/assets/5e68e388-83c0-41bf-acb6-6174ea58261f
 https://github.com/user-attachments/assets/6570367f-f36d-42c2-8f2b-a77a1f19cb36
 
  - `:Rec play` if **automatic_annotation_word_mode** is enabled, just by starting a recording and writing some words, any word is linked to its specific timestamp and recording. You can hover the cursor over a word, if that word is correctly linked, this command will launch the media player with that recording at that specific timestamp.
+ - 
+
+https://github.com/user-attachments/assets/e2d7ce16-18c4-4106-bb48-cb3951785a7a
+
 
  - `:Rec stop` stops the current recording.
 
