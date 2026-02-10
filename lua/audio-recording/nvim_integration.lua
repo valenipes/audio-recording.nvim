@@ -40,7 +40,7 @@ function M.setup(core_module)
          group = group -- needed to load correctly the autocmd, or it will load twice
          if cfg.auto_load_extmarks and core_module.state.extmarks_path and vim.fn.filereadable(core_module.state.extmarks_path) == 1 then
             if cfg.debug_mode == true then
-               vim.notify('audio_recording: extmarks loaded for the current buffer', vim.log.levels.WARN)
+               vim.notify('audio_recording: extmarks loaded for the current buffer', vim.log.levels.INFO)
             end
             pcall(function() core_module:load_marks_for_buf(core_module.state.current_bufnr) end)
          end

@@ -7,6 +7,7 @@ local OpusEncoder = require('audio.encoders.opus')
 -- Utilities to debug: 
 -- List of namespaces -- :lua print(vim.inspect(vim.api.nvim_get_namespaces())) 
 -- Check content of namespace -- :lua print(vim.inspect(vim.api.nvim_buf_get_extmarks(0, ns_id, 0, -1, { details =true }) or {}))
+-- Check the content of a table -- :lua print(vim.inspect(require("audio-recording.core").extmarks_table))
 
 local M = {
    config = {},
@@ -37,8 +38,8 @@ local M = {
 }
 
 -- These functions return the namespace id
-M.manual_ns = vim.api.nvim_create_namespace('audio_recording.manual_extmarks')
-M.automatic_word_ns = vim.api.nvim_create_namespace('audio_recording.automatic_word_extmarks')
+-- M.audio_recording_ns = vim.api.nvim_create_namespace('audio_recording.manual_extmarks')
+M.audio_recording_ns = vim.api.nvim_create_namespace('audio_recording.extmarks')
 
 local function get_text_range(bufnr, srow, scol, erow, ecol)
    -- FIXME: srow's and erow's clamping is useless, substitute with a =~ nil check, >0 check and also insert the corresponding errors.
@@ -93,8 +94,8 @@ local function prune_extmarks_by_word_match(bufnr)
       end
    end
 
-   collect_from_ns(M.manual_ns)
-   collect_from_ns(M.automatic_word_ns)
+   -- collect_from_ns(M.audio_recording_ns)
+   collect_from_ns(M.audio_recording_ns)
 
    -- here begins the pruning of the table
    for i = #M.extmarks_table, 1, -1 do -- iterates in all extmarks collected since now
@@ -139,8 +140,8 @@ function M:play_current_mark()
 
    -- ottieni extmarks nel buffer in tutti i namespace (manual e automatic)
    local ranges = {
-      { ns = self.manual_ns,         raw = vim.api.nvim_buf_get_extmarks(bufnr, self.manual_ns, { row, 0 }, { row, -1 }, { details = true }) or {} },
-      { ns = self.automatic_word_ns, raw = vim.api.nvim_buf_get_extmarks(bufnr, self.automatic_word_ns, { row, 0 }, { row, -1 }, { details = true }) or {} },
+      -- { ns = self.audio_recording_ns,         raw = vim.api.nvim_buf_get_extmarks(bufnr, self.audio_recording_ns, { row, 0 }, { row, -1 }, { details = true }) or {} },
+      { ns = self.audio_recording_ns, raw = vim.api.nvim_buf_get_extmarks(bufnr, self.audio_recording_ns, { row, 0 }, { row, -1 }, { details = true }) or {} },
    }
 
    local found = nil
@@ -265,7 +266,7 @@ local function create_extmark(bufnr, srow, scol, erow, ecol)
       opts.hl_eol = false
    end
 
-   local id = vim.api.nvim_buf_set_extmark(bufnr, M.automatic_word_ns, srow, scol, opts)
+   local id = vim.api.nvim_buf_set_extmark(bufnr, M.audio_recording_ns, srow, scol, opts)
 
    local details = {
       erow = erow,
@@ -313,7 +314,7 @@ end
 
 function M.remove_extmark_by_id(bufnr, id)
    if not id then return false end
-   vim.api.nvim_buf_del_extmark(bufnr, M.automatic_word_ns, id)
+   vim.api.nvim_buf_del_extmark(bufnr, M.audio_recording_ns, id)
    for i, e in ipairs(M.extmarks_table) do
       if e.id == id then
          table.remove(M.extmarks_table, i)
@@ -419,7 +420,7 @@ function M:save_marks_for_buf(bufnr)
       return
    end
 
-   local raw = vim.api.nvim_buf_get_extmarks(bufnr, self.manual_ns, 0, -1, { details = true })
+   local raw = vim.api.nvim_buf_get_extmarks(bufnr, self.audio_recording_ns, 0, -1, { details = true })
    local id_map = {}
    for _, m in ipairs(raw) do
       id_map[m[1]] = {
@@ -465,7 +466,7 @@ function M:load_marks_for_buf(bufnr)
 
    self.extmarks_table = marks
 
-   pcall(vim.api.nvim_buf_clear_namespace, bufnr, self.automatic_word_ns, 0, -1)
+   pcall(vim.api.nvim_buf_clear_namespace, bufnr, self.audio_recording_ns, 0, -1)
    local line_count = vim.api.nvim_buf_line_count(bufnr)
    for _, m in ipairs(marks) do
       local row = math.max(0, math.min(m.row or 0, line_count - 1))
@@ -489,7 +490,7 @@ function M:load_marks_for_buf(bufnr)
       end
 
       local ok2, new_id, err = pcall(function()
-         return vim.api.nvim_buf_set_extmark(bufnr, self.automatic_word_ns, row, col, opts)
+         return vim.api.nvim_buf_set_extmark(bufnr, self.audio_recording_ns, row, col, opts)
       end)
       if not ok2 or not new_id then
          vim.notify("audio-recording: failed to set extmark: " .. tostring(new_id or err), vim.log.levels.WARN)
@@ -593,7 +594,7 @@ function M:annotate(opts)
          timestamp .. " - Rec " .. utils.format_timestamp(self.state.start_timestamp))
 
       local ok, mark_id = pcall(function()
-         return vim.api.nvim_buf_set_extmark(0, self.manual_ns, row, col, {
+         return vim.api.nvim_buf_set_extmark(0, self.audio_recording_ns, row, col, {
             virt_text = { { line_text, "Comment" } },
             virt_text_pos = "eol",
             hl_mode = "combine",

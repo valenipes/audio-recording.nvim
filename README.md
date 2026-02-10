@@ -2,7 +2,7 @@
 
 Based on [kyouko.nvim](https://github.com/andry-dev/kyouko.nvim/blob/master/README.md) by [@andry-dev](https://github.com/andry-dev).
 
-Pre-alpha plugin to record lectures from within Neovim.
+Alpha plugin to record lectures from within Neovim.
 
 This plugin allows you to record audio from your microphone from within Neovim and also insert the current timestamp as an [extmark](https://neovim.io/doc/user/api.html#extmarks).
 
