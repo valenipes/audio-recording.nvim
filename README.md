@@ -9,7 +9,7 @@ A typical use-case is for taking notes for a lecture: maybe you want to record t
 
 ## Features
 
-- With audio-recording.nvim you can manually annotate where exactly a word in the lecture was said, so it's easier to find later on. 
+- With audio-recording.nvim you can manually annotate where exactly a line in the lecture was said, so it's easier to find later on. 
 
 - You can also activate in configs an experimental feature called **automatic_annotation_word_mode** to link words to a timestamp as you write, so when the recording is finished, it's sufficient to hover the cursor over a word and execute the command `:Rec play`.
 
@@ -102,11 +102,15 @@ https://github.com/user-attachments/assets/e2d7ce16-18c4-4106-bb48-cb3951785a7a
 
 ## WIP
  
- - [ ] Add an option to insert a timestamp on each <CR> in insert mode.
+ - [ ] Test the new features and optimize the code.
+ - [ ] Add an option to insert a timestamp on each line in insert mode.
 
 ## TODO
 
  - [ ] Support other sound servers.
  - [ ] Support other media players.
  
+## Known Issues
+
+ - [ ] Doesn't work with ultisnips.
 

@@ -328,42 +328,42 @@ function M.remove_extmark_by_id(bufnr, id)
 end
 
 function M.del_extmarks_on_cursor()
-  local api = vim.api
-  local bufnr = api.nvim_get_current_buf()
-  local win = api.nvim_get_current_win()
-  local pos = api.nvim_win_get_cursor(win)       -- {row, col}, 1-based row
-  local row0 = pos[1] - 1                        -- 0-based
+   local api = vim.api
+   local bufnr = api.nvim_get_current_buf()
+   local win = api.nvim_get_current_win()
+   local pos = api.nvim_win_get_cursor(win) -- {row, col}, 1-based row
+   local row0 = pos[1] - 1                 -- 0-based
 
-  local marks = api.nvim_buf_get_extmarks(bufnr, M.audio_recording_ns, {row0, 0}, {row0, -1}, {details = false})
+   local marks = api.nvim_buf_get_extmarks(bufnr, M.audio_recording_ns, { row0, 0 }, { row0, -1 }, { details = false })
 
-  for _, m in ipairs(marks) do
-    local id = m[1]
-    pcall(function() M.remove_extmark_by_id(bufnr, id) end)
-    -- pcall(api.nvim_buf_del_extmark, bufnr, M.audio_recording_ns, id)
-  end
+   for _, m in ipairs(marks) do
+      local id = m[1]
+      pcall(function() M.remove_extmark_by_id(bufnr, id) end)
+      -- pcall(api.nvim_buf_del_extmark, bufnr, M.audio_recording_ns, id)
+   end
 end
-
 
 function M.on_text_changed_i()
    local bufnr = vim.api.nvim_get_current_buf()
-   local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+   local cursor = vim.api.nvim_win_get_cursor(0)
+   local row, col = cursor[1], cursor[2]
    row = row - 1
 
-   -- leggo la linea corrente (se esiste)
    local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, true)[1] or ""
-   -- carattere immediatamente prima del cursore (col è 0-based come numero di colonne visive)
+
    local prev_char = nil
-   if col > 0 and col <= #line then
+   -- This section is meant do define which is the character before the cursor
+   if col > 0 and col <= #line + 1 then
       prev_char = string.sub(line, col, col)
-   elseif col > #line then
-      -- quando si è oltre la linea (rare), considera separatore
-      prev_char = "\n"
+      -- elseif col > #line then
+      --    prev_char = "\n"
    else
       prev_char = "\n"
    end
 
    if M.automatic_word_mode_state.in_word and utils.is_separator(prev_char) then
       local final_row, final_col = row, math.max(0, col - 1)
+      -- the function handles the state of M.automatic_word_mode_state.in_word
       close_current_word(final_row, final_col)
       return
    end
@@ -377,13 +377,20 @@ function M.on_text_changed_i()
 end
 
 function M.on_insert_leave()
-   if not M.automatic_word_mode_state.in_word then return end
-   local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+   if not M.automatic_word_mode_state.in_word then
+      if M.config.debug_mode then
+         vim.notify("audio_recording: function core.on_insert_leave: not in a word", vim.log.levels.WARN)
+      end
+      return
+   end
+   cursor = vim.api.nvim_win_get_cursor(0)
+   local row, col = cursor[1], cursor[2]
    row = row - 1
    local final_row, final_col = row, math.max(0, col + 1)
    close_current_word(final_row, final_col)
    if M.config.debug_mode then
-      vim.notify("audio_recording: exiting insert mode on row", final_row, "and column", final_col, vim.log.levels.INFO)
+      vim.notify("audio_recording: exiting insert mode on row " .. final_row .. " and column " .. final_col,
+         vim.log.levels.WARN)
    end
 end
 
@@ -641,15 +648,58 @@ function M:annotate(opts)
    end
 end
 
+local function get_buf_text()
+   -- returns current row, column and the line
+   local r, c = unpack(vim.api.nvim_win_get_cursor(0))
+   local line = vim.api.nvim_get_current_line()
+   return { row = r, col = c, line = line }
+end
+
 function M.enable_word_autocmds()
    vim.cmd([[
     augroup audio_recording_word
     autocmd!
-    autocmd TextChangedI * lua require('audio-recording.core').on_text_changed_i()
+    autocmd TextChangedI * lua require('audio-recording.core').select_insertions_and_discard_deletions() -- this autocommand is triggered everytime the text changes... This caused the program to crash when deleting text with backslash, because on_text_changed_i was called
     autocmd InsertLeave * lua require('audio-recording.core').on_insert_leave()
     augroup END
-   ]])
+  ]])
 end
+
+local state = {}
+function M.select_insertions_and_discard_deletions()
+   local bufnr = M.state.current_bufnr or vim.api.nvim_get_current_buf()
+   local s = state[bufnr]
+   if not s then
+      s = { last = get_buf_text(), last_was_insert = false }
+      state[bufnr] = s
+      return
+   end
+
+   local cur = get_buf_text()
+   local prev = s.last
+
+   local inserted = false
+   if cur.line == prev.line then
+      if #cur.line > #prev.line then
+         inserted = true
+      elseif #cur.line < #prev.line then
+         inserted = false
+      else
+         if cur.col > prev.col then inserted = true end
+      end
+   else
+      if #cur.line > #prev.line then inserted = true end
+   end
+
+   s.last = cur
+   s.last_was_insert = inserted
+
+   if inserted then
+      pcall(function() require('audio-recording.core').on_text_changed_i() end)
+   end
+end
+
+--
 
 function M.disable_word_autocmds()
    vim.cmd([[
