@@ -37,13 +37,13 @@ local M = {
    }
 }
 
--- These functions return the namespace id
+-- These functions create the namespace and then return its
 -- fixme: all extmarks, manual and automatic, are added in the same namespace and saved in the same file _extmarks.lua... for the future, it'd be better to store them in different namespaces saving them in different files. This is needed to avoid conflicts: every namespace has its indices, if multiple extmarks have the same index in the _extmarks.lua, there is conflict based on how the code is written.
--- M.audio_recording_ns = vim.api.nvim_create_namespace('audio_recording.manual_extmarks')
 M.audio_recording_ns = vim.api.nvim_create_namespace('audio_recording.extmarks')
 
 local function get_text_range(bufnr, srow, scol, erow, ecol)
-   -- FIXME: srow's and erow's clamping is useless, substitute with a =~ nil check, >0 check and also insert the corresponding errors.
+   -- Maybe FIXME? (see below) : srow's and erow's clamping is useless, substitute with a =~ nil check, >0 check and also insert the corresponding errors.
+   -- It could be useful to do this check: if erow is not equal to srow, it means that going newline (enter) didn't produced expected behaviour (new word), so having a check and a debug message could be useful to identify that bug.
    bufnr = bufnr or vim.api.nvim_get_current_buf()
    local line_count = vim.api.nvim_buf_line_count(bufnr)                            -- total number of lines in the buffer
    srow = math.max(0, math.min(srow or 0, line_count - 1))                          -- starting row
@@ -53,13 +53,20 @@ local function get_text_range(bufnr, srow, scol, erow, ecol)
       local start_col = math.max(0, math.min(scol or 0, #line))                     -- #line is the total number of columns
       local end_col = math.max(0, math.min(ecol or start_col, #line))
       return string.sub(line, start_col + 1, end_col)
-   else
+   elseif srow == erow - 1 then
+      local line = vim.api.nvim_buf_get_lines(bufnr, srow, srow + 1, true)[1] or "" -- returns the line
+      local start_col = math.max(0, math.min(scol or 0, #line))                     -- #line is the total number of columns
+      local end_col = #
+          line                                                                      -- math.max(0, math.min(ecol or start_col, #line))
       vim.notify("audio-recording: extmark's start row not equal to end row, no range returned", vim.log.levels.WARN)
+      return string.sub(line, start_col + 1, end_col)
    end
 end
 
 local function prune_extmarks_by_word_match(bufnr)
-   -- FIXME: prune_extmarks_by_word_match iterates inside namespaces, but it should iterate in M.extmarks_table, because it must be persistent and namespaces are not.
+   -- How the function works: it does a bulk api callto get all extmarks in the namespace and then save it in a temporary table (existing_ext_table), then it iterates in M.extmarks_table to check if the extmark in namespace is the same as in the M.extmarks_table, if not the extmark is deleted in M.extmarks_table
+   -- FIXME: there are mainly 2 issues: the most important one is that maybe the namespace isn't really needed, I could directly operate in the M.extmarks_table when deleting a word and the pruning shouldn't even occour in that case. If instead the pruning is needed for some reason (clarify in that case), the structure of the function is probably not optimal (expecially for long tables), because everytime it copies the namespace content in a new table (existing_ext_table) and then do the same number of operation needed to compare directly 1 element of the namespace with one element of the M.extmarks_table. The problem in this case is that I should do a lot of api calls, and this could slow down a lot.
+   -- Another idea to avoid useless operations is to consider only extmarks which are modified from a write to another.
    bufnr = bufnr or vim.api.nvim_get_current_buf()
    local existing_ext_table = {}
 
@@ -104,18 +111,21 @@ local function prune_extmarks_by_word_match(bufnr)
       local e = M.extmarks_table[i]
       if not e or not e.id then
          table.remove(M.extmarks_table, i)
+         -- vim.notify("1", vim.log.levels.WARN)
       else
          local info = existing_ext_table[e.id]
          if not info then
             table.remove(M.extmarks_table, i)
+            -- vim.notify("2", vim.log.levels.WARN)
          else
             local expected_word = e.metadata and e.metadata.word -- if e.metadata exists, it accesses e.metadata.word
             -- here checks if the extmark "e" in the extmarks_table is the same as the extmark in the namespace by comparing the word, if not it is deleted
             if expected_word and expected_word ~= "" then
                local actual = get_text_range(bufnr, info.start_row, info.start_col, info.end_row, info.end_col) or ""
                if actual ~= expected_word then
+                  -- vim.notify(expected_word .. actual, vim.log.levels.WARN)
                   table.remove(M.extmarks_table, i)
-                  -- print("Table removed")
+                  -- print("Extmark removed")
                else -- update location
                   e.row = info.start_row
                   e.col = info.start_col
@@ -123,11 +133,9 @@ local function prune_extmarks_by_word_match(bufnr)
                   e.end_col = info.end_col
                end
             else
-               -- if metadata.word doesn't exist, update the location -- I don't understand why.. if the word doesn't exist then the extmark should be deleted...
-               e.row = info.start_row
-               e.col = info.start_col
-               e.end_row = info.end_row
-               e.end_col = info.end_col
+               -- if the word doesn't exist then the extmark is be deleted
+               table.remove(M.extmarks_table, i)
+               -- vim.notify("4", vim.log.levels.WARN)
             end
          end
       end
@@ -139,10 +147,8 @@ function M:play_current_mark()
    local bufnr = vim.api.nvim_get_current_buf()
    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
    row = row - 1
-
-   -- ottieni extmarks nel buffer in tutti i namespace (manual e automatic)
+   -- obtain extmarks in all namespaces (now one but before there were 2)
    local ranges = {
-      -- { ns = self.audio_recording_ns,         raw = vim.api.nvim_buf_get_extmarks(bufnr, self.audio_recording_ns, { row, 0 }, { row, -1 }, { details = true }) or {} },
       { ns = self.audio_recording_ns, raw = vim.api.nvim_buf_get_extmarks(bufnr, self.audio_recording_ns, { row, 0 }, { row, -1 }, { details = true }) or {} },
    }
 
@@ -180,8 +186,7 @@ function M:play_current_mark()
       vim.notify("audio-recording: no extmark under cursor", vim.log.levels.WARN)
       return
    end
-
-   -- trova la entry nella extmarks_table usando l'id
+   -- find the entry in M.extmarks_table using the id
    local entry = nil
    for _, e in ipairs(self.extmarks_table) do
       if e.id == found.id then
@@ -203,13 +208,13 @@ function M:play_current_mark()
       return
    end
 
-   -- costruisci comando: mpv <recording> --start=<HH:MM:SS>
+   -- mpv shell command: mpv <recording> --start=<HH:MM:SS>
    local cmd = { "mpv", recording }
    if timestamp and timestamp ~= '' then
       table.insert(cmd, "--start=" .. tostring(timestamp))
    end
 
-   -- avvia mpv in background (non bloccante) e salva il pid
+   -- starts mpv in background and save its pid
    local ok, jid = pcall(function()
       return vim.fn.jobstart(cmd, { detach = true })
    end)
@@ -219,13 +224,10 @@ function M:play_current_mark()
       return
    end
 
-   -- salva pid per poterlo killare dopo; jobstart ritorna il job id (jid),
-   -- ma vim.fn.jobstart in Neovim può essere usato con vim.loop to get pid:
    local ok2, pid = pcall(function() return vim.fn.jobpid(jid) end)
    if ok2 and pid and pid > 0 then
       self.state.player_pid = pid
    else
-      -- fallback: salva jid comunque (potrebbe essere utile su alcune versioni)
       self.state.player_pid = jid
    end
 
@@ -241,11 +243,11 @@ function M:kill_player()
       return
    end
 
-   -- prova a uccidere il processo
+   -- try to kill the process
    local cmd = string.format("kill %d 2>/dev/null", tonumber(pid))
    local res = os.execute(cmd)
 
-   -- pulizia stato
+   -- clean status
    self.state.player_pid = nil
 
    if res == 0 or res == true then
@@ -262,6 +264,7 @@ local function create_extmark(bufnr, srow, scol, erow, ecol)
    local opts = {
       end_row = erow,
       end_col = ecol,
+      right_gravity = false,
    }
    if M.config.debug_mode then
       utils.ensure_highlight()
@@ -270,6 +273,7 @@ local function create_extmark(bufnr, srow, scol, erow, ecol)
    end
 
    local id = vim.api.nvim_buf_set_extmark(bufnr, M.audio_recording_ns, srow, scol, opts)
+   -- .notify("CREATO" .. .. tostring(id)log.levels.WARN)
 
    local details = {
       erow = erow,
@@ -280,25 +284,8 @@ local function create_extmark(bufnr, srow, scol, erow, ecol)
    local entry = M:make_extmark_entry(id, srow, scol, details)
    entry.metadata.timestamp = timestamp
 
-   -- estrai il testo effettivo nell'intervallo e salvalo in metadata.word
-   local function get_range_text(buf, sr, sc, er, ec)
-      local line_count = vim.api.nvim_buf_line_count(buf)
-      sr = math.max(0, math.min(sr or 0, line_count - 1))
-      er = math.max(0, math.min(er or sr, line_count - 1))
-      if sr == er then
-         local line = vim.api.nvim_buf_get_lines(buf, sr, sr + 1, true)[1] or ""
-         local start_col = math.max(0, math.min(sc or 0, #line))
-         local end_col = math.max(0, math.min(ec or start_col, #line))
-         return string.sub(line, start_col + 1, end_col)
-      end
-      local lines = vim.api.nvim_buf_get_lines(buf, sr, er + 1, true)
-      if #lines == 0 then return "" end
-      lines[1] = string.sub(lines[1], (sc or 0) + 1)
-      lines[#lines] = string.sub(lines[#lines], 1, ec or #lines[#lines])
-      return table.concat(lines, "\n")
-   end
-
-   local word = get_range_text(bufnr, srow, scol, erow, ecol)
+   -- extracts text and saves it metadata.word
+   local word = get_text_range(bufnr, srow, scol, erow, ecol)
    entry.metadata.word = word or ""
 
    table.insert(M.extmarks_table, entry)
@@ -332,7 +319,7 @@ function M.del_extmarks_on_cursor()
    local bufnr = api.nvim_get_current_buf()
    local win = api.nvim_get_current_win()
    local pos = api.nvim_win_get_cursor(win) -- {row, col}, 1-based row
-   local row0 = pos[1] - 1                 -- 0-based
+   local row0 = pos[1] - 1                  -- 0-based
 
    local marks = api.nvim_buf_get_extmarks(bufnr, M.audio_recording_ns, { row0, 0 }, { row0, -1 }, { details = false })
 
@@ -347,30 +334,37 @@ function M.on_text_changed_i()
    local bufnr = vim.api.nvim_get_current_buf()
    local cursor = vim.api.nvim_win_get_cursor(0)
    local row, col = cursor[1], cursor[2]
-   row = row - 1
 
-   local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, true)[1] or ""
+   -- stores the entire row
+   local line = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, true)[1] or ""
 
    local prev_char = nil
    -- This section is meant do define which is the character before the cursor
-   if col > 0 and col <= #line + 1 then
-      prev_char = string.sub(line, col, col)
-      -- elseif col > #line then
-      --    prev_char = "\n"
-   else
+   if col == 0 then
       prev_char = "\n"
+      -- vim.notify("A", vim.log.levels.WARN)
+   else
+      prev_char = string.sub(line, col, col)
    end
-
    if M.automatic_word_mode_state.in_word and utils.is_separator(prev_char) then
-      local final_row, final_col = row, math.max(0, col - 1)
-      -- the function handles the state of M.automatic_word_mode_state.in_word
-      close_current_word(final_row, final_col)
+      if prev_char ~= "\n" then
+         local final_row = row - 1
+         local final_col = math.max(0, col - 1)
+         -- the function handles the state of M.automatic_word_mode_state.in_word
+         close_current_word(final_row, final_col)
+         -- vim.notify("A", vim.log.levels.WARN)
+      else
+         local final_row = row - 2
+         local prev_line = vim.api.nvim_buf_get_lines(bufnr, row - 2, row - 1, true)[1] or ""
+         local final_col = #prev_line
+         close_current_word(final_row, final_col)
+      end
       return
    end
 
    if (not M.automatic_word_mode_state.in_word) and (not utils.is_separator(prev_char)) then
       M.automatic_word_mode_state.in_word = true
-      M.automatic_word_mode_state.start_row = row
+      M.automatic_word_mode_state.start_row = row - 1
       M.automatic_word_mode_state.start_col = math.max(0, col - 1)
       return
    end
@@ -410,6 +404,7 @@ function M:make_extmark_entry(id, srow, scol, details) -- s stands for starting 
       virt_text_pos = details.virt_text_pos,
       hl_mode = details.hl_mode,
       right_gravity = details.right_gravity,
+      end_right_gravity = details.end_right_gravity,
       hl_group = details.hl_group,
       hl_eol = details.hl_eol,
       metadata = {
@@ -670,7 +665,7 @@ function M.select_insertions_and_discard_deletions()
    local bufnr = M.state.current_bufnr or vim.api.nvim_get_current_buf()
    local s = state[bufnr]
    if not s then
-      s = { last = get_buf_text(), last_was_insert = false }
+      s = { last = get_buf_text() }
       state[bufnr] = s
       return
    end
@@ -678,23 +673,21 @@ function M.select_insertions_and_discard_deletions()
    local cur = get_buf_text()
    local prev = s.last
 
-   local inserted = false
-   if cur.line == prev.line then
-      if #cur.line > #prev.line then
-         inserted = true
-      elseif #cur.line < #prev.line then
-         inserted = false
-      else
-         if cur.col > prev.col then inserted = true end
+   local is_last_insertion = true
+   -- this is a check on wether the last time autocommand TextChangedI was triggered it was an insertion or a deletion
+   if cur.row == prev.row then
+      if #cur.line < #prev.line then
+         is_last_insertion = false
       end
-   else
-      if #cur.line > #prev.line then inserted = true end
+   elseif cur.row ~= prev.row then
+      if cur.col ~= 0 then
+         is_last_insertion = false
+      end
    end
 
    s.last = cur
-   s.last_was_insert = inserted
 
-   if inserted then
+   if is_last_insertion then
       pcall(function() require('audio-recording.core').on_text_changed_i() end)
    end
 end
