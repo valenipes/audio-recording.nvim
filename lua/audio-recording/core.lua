@@ -1,6 +1,7 @@
 local utils = require('audio-recording.utils')
 local job_mod = require('audio-recording.job')
 local debug_buf = require('audio-recording.debug_buf')
+local panel = require('audio-recording.panel')
 
 local PWSource = require('audio.sources.pipewire')
 local OpusEncoder = require('audio.encoders.opus')
@@ -58,7 +59,7 @@ local function get_text_range(bufnr, srow, scol, erow, ecol)
       local start_col = math.max(0, math.min(scol or 0, #line))                     -- #line is the total number of columns
       local end_col = #
           line                                                                      -- math.max(0, math.min(ecol or start_col, #line))
-      vim.notify("audio-recording: extmark's start row not equal to end row, no range returned", vim.log.levels.WARN)
+      -- vim.notify("audio-recording: extmark's start row not equal to end row, no range returned", vim.log.levels.WARN)
       return string.sub(line, start_col + 1, end_col)
    end
 end
@@ -208,12 +209,25 @@ function M:play_current_mark()
       return
    end
 
-   -- mpv shell command: mpv <recording> --start=<HH:MM:SS>
-   local cmd = { "mpv", recording }
-   if timestamp and timestamp ~= '' then
-      table.insert(cmd, "--start=" .. tostring(timestamp))
+   -- this must happen before the panel is opened again
+   if self.state.player_pid ~= nil then
+      M:kill_player()
    end
 
+   -- open the panel
+   if M.config.display_panel == true then
+      panel.open_panel()
+   end
+   -- mpv shell command: mpv <recording> --start=<HH:MM:SS>
+
+   local cmd = {
+      "mpv",
+      "--input-ipc-server=/tmp/audio_recording_mpv_socket",
+      "--no-config",
+      "--start=" .. tostring(timestamp),
+      recording
+   }
+   -- kill the previous player if it's still active
    -- starts mpv in background and save its pid
    local ok, jid = pcall(function()
       return vim.fn.jobstart(cmd, { detach = true })
@@ -246,6 +260,11 @@ function M:kill_player()
    -- try to kill the process
    local cmd = string.format("kill %d 2>/dev/null", tonumber(pid))
    local res = os.execute(cmd)
+
+   -- close the panel
+   if M.config.display_panel == true then
+      panel.close_panel()
+   end
 
    -- clean status
    self.state.player_pid = nil
@@ -372,20 +391,26 @@ end
 
 function M.on_insert_leave()
    if not M.automatic_word_mode_state.in_word then
-      if M.config.debug_mode then
-         vim.notify("audio_recording: function core.on_insert_leave: not in a word", vim.log.levels.WARN)
-      end
+      -- in this case, function needs to exit without closing the word
+      --
+      -- DEBUG:
+      -- if M.config.debug_mode then
+      --    vim.notify("audio_recording: function core.on_insert_leave: not in a word", vim.log.levels.WARN)
+      -- end
       return
    end
    cursor = vim.api.nvim_win_get_cursor(0)
    local row, col = cursor[1], cursor[2]
+   -- vim.notify("audio_recording: col" .. col, vim.log.levels.ERROR)
    row = row - 1
    local final_row, final_col = row, math.max(0, col + 1)
    close_current_word(final_row, final_col)
-   if M.config.debug_mode then
-      vim.notify("audio_recording: exiting insert mode on row " .. final_row .. " and column " .. final_col,
-         vim.log.levels.WARN)
-   end
+
+   -- DEBUG:
+   -- if M.config.debug_mode then
+   --    vim.notify("audio_recording: exiting insert mode on row " .. final_row .. " and column " .. final_col,
+   --       vim.log.levels.WARN)
+   -- end
 end
 
 function M.get_extmarks_table()

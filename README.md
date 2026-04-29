@@ -39,6 +39,8 @@ return {
       auto_load_extmarks = true,      -- if true, it will load extmarks from previous 
       manual_annotation_mode = true,      -- if true, you can use manual annotations
       automatic_annotation_word_mode = false,      -- if true, you can use automatic annotations ##EXPERIMENTAL##
+      display_panel = true,           -- if true, a panel will be displayed when reproducing an audio; this will suggest temporary shortcuts to pause/play or seek in the audio
+
 
    },
    -- Uncomment and customize if needed.

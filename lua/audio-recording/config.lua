@@ -4,6 +4,7 @@ local defaults = {
   auto_load_extmarks = true,
   manual_annotation_mode = true,
   automatic_annotation_word_mode = true, -- not extensively tested
+  display_panel = true
 }
 
 local M = {
@@ -22,6 +23,10 @@ local function normalize_config(cfg)
   if type(cfg.auto_load_extmarks) ~= 'boolean' then
     cfg.auto_load_extmarks = defaults.auto_load_extmarks
     vim.notify("audio-recording: wrong configuration for auto_load_extmarks, replace it with a boolean. Auto load enabled.", vim.log.levels.WARN)
+  end
+  if type(cfg.display_panel) ~= 'boolean' then
+    cfg.display_panel = defaults.display_panel
+    vim.notify("audio-recording: wrong configuration for display_panel, replace it with a boolean. Auto load enabled.", vim.log.levels.WARN)
   end
   if type(cfg.manual_annotation_mode) ~= 'boolean' then
     cfg.manual_annotation_mode = defaults.manual_annotation_mode
