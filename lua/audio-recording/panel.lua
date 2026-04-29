@@ -44,9 +44,10 @@ function M.close_panel()
       end
 
       pcall(function()
-         vim.keymap.del({ "i", "n" }, "<C-1>")
-         vim.keymap.del({ "i", "n" }, "<C-2>")
-         vim.keymap.del({ "i", "n" }, "<C-3>")
+         vim.keymap.del({ "i", "n" }, "<C-6>")
+         vim.keymap.del({ "i", "n" }, "<C-7>")
+         vim.keymap.del({ "i", "n" }, "<C-8>")
+         vim.keymap.del({ "i", "n" }, "<C-9>")
       end)
 
       M.popup_buf = nil

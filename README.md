@@ -19,6 +19,8 @@ Right now, the plugin only works with Linux (Pipewire) and with `opus-tools` ins
 
 To use the automatic annotation mode, as of now only `mpv` is supported. 
 
+To use the panel (or: to send some commands to `mpv`, like pause/play or move in the audio +5s or -5s), install `socat`.
+
 <!-- deleted as included as a requirement in installation -->
 <!-- This plugin uses Plenary's Job API, so you need [plenary.nvim](nvim-lua/plenary.nvim) installed. -->
 
